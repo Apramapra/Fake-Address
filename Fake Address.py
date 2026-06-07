@@ -1,3 +1,4 @@
+import os
 from flask import Flask, request, jsonify
 from faker import Faker
 from faker.config import AVAILABLE_LOCALES
@@ -15,12 +16,12 @@ COUNTRY_LOCALE = {
     'france': 'fr_FR',
     'usa': 'en_US',
     'uk': 'en_GB',
-    # ... add others as needed
+    # Add more countries as needed – see the full list from earlier versions
 }
 
 # Country name -> English locale for address (perfect English)
 ENGLISH_ADDRESS_LOCALE = {
-    'india': 'en_IN',      # <-- FIXES YOUR ISSUE
+    'india': 'en_IN',
     'usa': 'en_US',
     'uk': 'en_GB',
     'canada': 'en_CA',
@@ -32,7 +33,6 @@ def get_address_faker(country_name):
     key = country_name.lower().strip()
     if key in ENGLISH_ADDRESS_LOCALE:
         return Faker(ENGLISH_ADDRESS_LOCALE[key])
-    # For countries without English locale (Iran, Japan, etc.)
     if key in COUNTRY_LOCALE:
         return Faker(COUNTRY_LOCALE[key])  # will be transliterated later
     return Faker('en_US')  # fallback
@@ -45,19 +45,17 @@ def fake_person_and_address():
 
     country_lower = country_param.lower().strip()
     
-    # Get name/phone faker (native locale)
     if country_lower not in COUNTRY_LOCALE:
         return jsonify({'error': f'Country "{country_param}" not supported'}), 400
+
     native_faker = Faker(COUNTRY_LOCALE[country_lower])
     first_name = native_faker.first_name()
     last_name = native_faker.last_name()
     phone_number = native_faker.phone_number()
 
-    # Get address faker (English where possible)
     addr_faker = get_address_faker(country_lower)
     street = addr_faker.street_address()
     city = addr_faker.city()
-    # Handle state/administrative unit safely
     if hasattr(addr_faker, 'state'):
         state = addr_faker.state()
     elif hasattr(addr_faker, 'administrative_unit'):
@@ -67,7 +65,6 @@ def fake_person_and_address():
     zipcode = addr_faker.postcode()
     country = addr_faker.current_country()
 
-    # Transliterate only if the address might be non-English (i.e., we used native locale)
     if country_lower not in ENGLISH_ADDRESS_LOCALE:
         street = unidecode(street)
         city = unidecode(city)
@@ -100,4 +97,7 @@ def list_countries():
     })
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # Use the PORT environment variable (Render sets this) or default to 5000
+    port = int(os.environ.get('PORT', 5000))
+    # In production, gunicorn will run the app; this block is for local testing only
+    app.run(host='0.0.0.0', port=port)
